@@ -9,7 +9,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.google.api.client.util.store.FileDataStoreFactory;
@@ -17,14 +19,15 @@ import com.google.api.services.sheets.v4.model.ValueRange;
 
 public class SheetUpdater {
 	
-	private static final String[] COLUMNS = {"type", "relics", "enemies", "turns", "damage"};
+	private static final String[] COLUMNS = {"type", "enemies", "relics", "turns", "hpChange", "maxHpChange", "hpOnExit", "maxHpOnExit", 
+											 "cardsUpgraded", "cardsPurged", "cardPicked", "cardsNotPicked", "potionsObtained", "goldChange", "goldOnExit"};
 	
 	private static SheetUpdater singletonInstance;
 	
 	private File saveFolder;
 	private ObjectMapper objectMapper;
 	
-	private SheetUpdater() {
+	private SheetUpdater() throws JsonParseException, JsonMappingException, IOException {
 		saveFolder = new File(Configuration.get().getSaveDirectory());
 		objectMapper = new ObjectMapper();
 		objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -34,7 +37,7 @@ public class SheetUpdater {
 		buggyLogger.setLevel(java.util.logging.Level.SEVERE);
 	}
 	
-	public static SheetUpdater get() {
+	public static SheetUpdater get() throws JsonParseException, JsonMappingException, IOException {
 		if (singletonInstance != null)
 			return singletonInstance;
 		
@@ -42,7 +45,7 @@ public class SheetUpdater {
 		return singletonInstance;
 	}
 
-	public void update() {
+	public void update() throws IOException, GeneralSecurityException {
 		
 		long lastModified = Long.MIN_VALUE;
 		File newestSave = null;
@@ -54,23 +57,17 @@ public class SheetUpdater {
 		
 		byte[] jsonData = null;
 		if (newestSave != null)
-			try {
-				jsonData = Files.readAllBytes(newestSave.toPath());
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		
-		
+			jsonData = Files.readAllBytes(newestSave.toPath());
+
 		RunData runData = null;
-		try {
-			runData = objectMapper.readValue(jsonData, RunData.class);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		runData = objectMapper.readValue(jsonData, RunData.class);
+		runData.setCharacterName(underscoreToCapitalCase(newestSave.getName().substring(0, newestSave.getName().indexOf('.'))));
+		runData.finalize();
 		Map<Integer, Map<String, Object>> floorsMap = runData.getFloors();
 		
+		
 		LinkedList<List<Object>> values = new LinkedList<List<Object>>();
-		for (int i=1; i < 55; i++) {
+		for (int i=0; i < 55; i++) {
 			LinkedList<Object> row = new LinkedList<Object>();
 			for (String column : COLUMNS) {
 				Object cell = floorsMap.get(i).get(column);
@@ -89,7 +86,7 @@ public class SheetUpdater {
 			if (cardName.charAt(cardName.length() - 2) == '_')
 				cardName = cardName.substring(0, cardName.length() - 2);
 			
-			int upgrades = (int) card.get("upgrades");
+			int upgrades = ((Number) card.get("upgrades")).intValue();
 			if (upgrades > 0)
 				cardName = cardName + "+";
 			if (upgrades > 1)
@@ -100,22 +97,19 @@ public class SheetUpdater {
 			for (int i=cardNameList.size(); i < 100; i++)
 				cardNameList.add("");
 		
-		ValueRange floorTable = new ValueRange().setValues(values).setRange("Floor Stats!B7:60");
+		ValueRange floorTable = new ValueRange().setValues(values).setRange("Floor Stats!B7:61");
 		ValueRange neowBonus = new ValueRange().setValues(Arrays.asList(Arrays.asList(
-						underscoreToCapitalCase(newestSave.getName().substring(0, newestSave.getName().indexOf('.'))),
+						runData.getCharacterName(),
 						underscoreToCapitalCase(runData.neowBonus), 
 						underscoreToCapitalCase(runData.neowCost))
 				)).setRange("Floor Stats!D2:D4").setMajorDimension("COLUMNS");
 		ValueRange deckList = new ValueRange().setValues(Arrays.asList(cardNameList)).setRange("Deck List!A1:A100").setMajorDimension("COLUMNS");
+		ValueRange bossRelicsSkipped = new ValueRange().setValues(Arrays.asList(Arrays.asList(runData.getBossRelicsSkipped()))).setRange("Floor Stats!G3:G4").setMajorDimension("COLUMNS");
 		
-		try {
-			SheetWriter.writeToSheet(Arrays.asList(floorTable, neowBonus, deckList));
-		} catch (IOException | GeneralSecurityException e) {
-			e.printStackTrace();
-		}
+		SheetWriter.writeToSheet(Arrays.asList(floorTable, neowBonus, deckList, bossRelicsSkipped));
 	}
 	
-	private static String underscoreToCapitalCase(String underscoreString) {
+	public static String underscoreToCapitalCase(String underscoreString) {
 		String output = "";
 		for (int i=0; i < underscoreString.length(); i++) {
 			char ch = underscoreString.charAt(i);

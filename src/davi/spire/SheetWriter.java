@@ -40,13 +40,9 @@ public class SheetWriter {
     	
     }
     
-    public static SheetWriter get() {
+    public static SheetWriter get() throws GeneralSecurityException, IOException {
     	if (singletonInstance == null)
-			try {
-				singletonInstance = new SheetWriter();
-			} catch (GeneralSecurityException | IOException e) {
-				e.printStackTrace();
-			}
+			singletonInstance = new SheetWriter();
     	return singletonInstance;
     }
 

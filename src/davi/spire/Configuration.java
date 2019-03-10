@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class Configuration {
@@ -19,23 +21,15 @@ public class Configuration {
 	private Configuration() {
 	}
 	
-	public static Configuration get() {
+	public static Configuration get() throws JsonParseException, JsonMappingException, IOException {
 		
 		if (instance != null)
 			return instance;
 		
 		ObjectMapper objectMapper = new ObjectMapper();
 		byte[] jsonData = null;
-		try {
-			jsonData = Files.readAllBytes(Paths.get(CONFIG_PATH));
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		try {
-			instance = objectMapper.readValue(jsonData, Configuration.class);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		jsonData = Files.readAllBytes(Paths.get(CONFIG_PATH));
+		instance = objectMapper.readValue(jsonData, Configuration.class);
 		return instance;
 	}
 
