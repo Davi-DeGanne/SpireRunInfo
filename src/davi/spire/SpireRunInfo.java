@@ -109,7 +109,7 @@ public class SpireRunInfo {
         aboutItem.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 JOptionPane.showMessageDialog(null,
-                        "SpireRunInfo v0.8 Beta\nCreated by Davi\nPlease contact DaviBones#6180 on Discord with questions, suggestions, and/or bug reports.");
+                        "SpireRunInfo v0.9 Beta\nCreated by Davi\nPlease contact DaviBones#6180 on Discord with questions, suggestions, and/or bug reports.");
             }
         });
          
