@@ -26,6 +26,7 @@ public class SheetUpdater {
 	
 	private File saveFolder;
 	private ObjectMapper objectMapper;
+	private long lastUpdateTimeModified = Long.MIN_VALUE;
 	
 	private SheetUpdater() throws JsonParseException, JsonMappingException, IOException {
 		saveFolder = new File(Configuration.get().getSaveDirectory());
@@ -54,6 +55,12 @@ public class SheetUpdater {
 				lastModified = f.lastModified();
 				newestSave = f;
 			}
+		
+		// This makes sure that a full update is only made if the save file is different from last time.
+		if (lastUpdateTimeModified == lastModified)
+			return;
+		else if (lastUpdateTimeModified < lastModified)
+			lastUpdateTimeModified = lastModified;
 		
 		byte[] jsonData = null;
 		if (newestSave != null)

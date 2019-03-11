@@ -80,6 +80,9 @@ public class RunData {
 	
 	private void intValuePerFloor(List<Number> list, String intName) {
 		
+		if (list.size() == 0)
+			return;
+		
 		int valueOnExit = list.get(0).intValue();
 		floors.get(1).put(intName + "OnExit", valueOnExit);
 		
@@ -179,9 +182,12 @@ public class RunData {
 		} else
 			startingHp = startingMaxHp;
 		
-		floor1.put("maxHpChange", ((Number) floor1.get("maxHpOnExit")).intValue() - startingMaxHp);
-		floor1.put("hpChange", ((Number) floor1.get("hpOnExit")).intValue() - startingHp);
-		floor1.put("goldChange", ((Number) floor1.get("goldOnExit")).intValue() - 100);
+		if (floor1.containsKey("maxHpOnExit")) 
+			floor1.put("maxHpChange", ((Number) floor1.get("maxHpOnExit")).intValue() - startingMaxHp);
+		if (floor1.containsKey("hpOnExit")) 
+			floor1.put("hpChange", ((Number) floor1.get("hpOnExit")).intValue() - startingHp);
+		if (floor1.containsKey("goldOnExit")) 
+			floor1.put("goldChange", ((Number) floor1.get("goldOnExit")).intValue() - 100);
 		
 		
 		for (int i=0; i < metricItemsPurchased.size(); i++) {
