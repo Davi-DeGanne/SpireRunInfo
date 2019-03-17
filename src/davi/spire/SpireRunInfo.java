@@ -31,7 +31,7 @@ public class SpireRunInfo {
 			e.printStackTrace();
 			return;
 		}
-        System.setOut(o); 
+        System.setErr(o);
     	
         try {
         	UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());

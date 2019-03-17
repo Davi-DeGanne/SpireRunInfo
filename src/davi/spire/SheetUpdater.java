@@ -7,8 +7,6 @@ import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -23,7 +21,10 @@ public class SheetUpdater {
 											 "cardsUpgraded", "cardsPurged", "cardPicked", "cardsNotPicked", "potionsObtained", "goldChange", "goldOnExit"};
 	
 	private static SheetUpdater singletonInstance;
-	
+
+	private RunData currentRun = null;
+	private RunData prevRun = null;
+	private RunData prevPrevRun = null;
 	private File saveFolder;
 	private ObjectMapper objectMapper;
 	private long lastUpdateTimeModified = Long.MIN_VALUE;
@@ -48,7 +49,7 @@ public class SheetUpdater {
 
 	public void update() throws IOException, GeneralSecurityException {
 		
-		long lastModified = Long.MIN_VALUE;
+		long lastModified = Long.MIN_VALUE + 1;
 		File newestSave = null;
 		for (File f: saveFolder.listFiles()) 
 			if (f.lastModified() > lastModified && f.getName().contains("BETA")) {
@@ -65,55 +66,72 @@ public class SheetUpdater {
 		byte[] jsonData = null;
 		if (newestSave != null)
 			jsonData = Files.readAllBytes(newestSave.toPath());
-
-		RunData runData = null;
-		runData = objectMapper.readValue(jsonData, RunData.class);
-		runData.setCharacterName(underscoreToCapitalCase(newestSave.getName().substring(0, newestSave.getName().indexOf('.'))));
-		runData.finalize();
-		Map<Integer, Map<String, Object>> floorsMap = runData.getFloors();
 		
 		
-		LinkedList<List<Object>> values = new LinkedList<List<Object>>();
-		for (int i=0; i < 55; i++) {
-			LinkedList<Object> row = new LinkedList<Object>();
-			for (String column : COLUMNS) {
-				Object cell = floorsMap.get(i).get(column);
-				if (cell != null)
-					row.add(cell.toString());
-				else
-					row.add("");
+		List<RunData> runDataList = new LinkedList<RunData>();
+		{
+			RunData runData = null;
+			if (jsonData != null) {
+				runData = objectMapper.readValue(jsonData, RunData.class);
+				runData.finalize(underscoreToCapitalCase(newestSave.getName().substring(0, newestSave.getName().indexOf('.'))));
 			}
-			values.add(row);
+
+			if (currentRun != null && !runData.equals(currentRun)) {
+				prevPrevRun = prevRun;
+				prevRun = currentRun;
+			}
+			currentRun = runData;
+			
+			if (currentRun != null)
+				runDataList.add(currentRun);
+			if (prevRun != null) runDataList.add(prevRun);
+			if (prevPrevRun != null) runDataList.add(prevPrevRun);
 		}
 		
-		LinkedList<Object> cardNameList = new LinkedList<Object>();
-		for (Map<String, Object> card: runData.cards) {
+
+		
+		for (int runIndex = 0; runIndex < 3; runIndex++) {
+			String sheetName = "Floor Stats";
+			if (runIndex == 1)
+				sheetName = sheetName + " (Previous Run)";
+			else if (runIndex > 1)
+				sheetName = sheetName + " (" + runIndex + " Runs Previous)";
 			
-			String cardName = (String) card.get("id");
-			if (cardName.charAt(cardName.length() - 2) == '_')
-				cardName = cardName.substring(0, cardName.length() - 2);
+			RunData runData;
+			if (runDataList.size() > runIndex)
+				runData = runDataList.get(runIndex);
+			else
+				runData = new RunData();
 			
-			int upgrades = ((Number) card.get("upgrades")).intValue();
-			if (upgrades > 0)
-				cardName = cardName + "+";
-			if (upgrades > 1)
-				cardName = cardName + upgrades;
-			
-			cardNameList.add(cardName);
+
+			LinkedList<List<Object>> values = new LinkedList<List<Object>>();
+			for (int i=0; i < 56; i++) {
+				LinkedList<Object> row = new LinkedList<Object>();
+				for (String column : COLUMNS) {
+					Object cell = runData.getFloors().get(i).get(column);
+					if (cell != null)
+						row.add(cell.toString());
+					else
+						row.add("");
+				}
+				values.add(row);
+			}
+
+
+			ValueRange floorTable = new ValueRange().setValues(values).setRange(sheetName + "!B7:62");
+			ValueRange neowBonus = new ValueRange().setValues(Arrays.asList(Arrays.asList(
+					runData.getCharacterName(),
+					underscoreToCapitalCase(runData.neowBonus), 
+					underscoreToCapitalCase(runData.neowCost))
+					)).setRange(sheetName + "!D2:D4").setMajorDimension("COLUMNS");
+			ValueRange deckList = new ValueRange().setValues(Arrays.asList(runData.getCards())).setRange(sheetName + "!C69:C168").setMajorDimension("COLUMNS");
+			ValueRange bossRelics = new ValueRange().setValues(Arrays.asList(Arrays.asList(runData.getBossRelicsSkipped()))).setRange(sheetName + "!G3:G4").setMajorDimension("COLUMNS");
+
+			SheetWriter.writeToSheet(Arrays.asList(floorTable, neowBonus, deckList, bossRelics));
 		}
-			for (int i=cardNameList.size(); i < 100; i++)
-				cardNameList.add("");
 		
-		ValueRange floorTable = new ValueRange().setValues(values).setRange("Floor Stats!B7:61");
-		ValueRange neowBonus = new ValueRange().setValues(Arrays.asList(Arrays.asList(
-						runData.getCharacterName(),
-						underscoreToCapitalCase(runData.neowBonus), 
-						underscoreToCapitalCase(runData.neowCost))
-				)).setRange("Floor Stats!D2:D4").setMajorDimension("COLUMNS");
-		ValueRange deckList = new ValueRange().setValues(Arrays.asList(cardNameList)).setRange("Deck List!A1:A100").setMajorDimension("COLUMNS");
-		ValueRange bossRelicsSkipped = new ValueRange().setValues(Arrays.asList(Arrays.asList(runData.getBossRelicsSkipped()))).setRange("Floor Stats!G3:G4").setMajorDimension("COLUMNS");
 		
-		SheetWriter.writeToSheet(Arrays.asList(floorTable, neowBonus, deckList, bossRelicsSkipped));
+		
 	}
 	
 	public static String underscoreToCapitalCase(String underscoreString) {
